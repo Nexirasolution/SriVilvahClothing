@@ -1,0 +1,110 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+// Palette: 60% white/cream · 25% navy · 10% gold · 5% pale gold
+// Keep in sync with Navbar, Footer, ProductCard and CouponMarquee.
+const CREAM = '#F8F6EF';
+const NAVY = '#102A56';
+const NAVY_DARK = '#071A3A';
+const GOLD = '#C9A227';
+const GOLD_PALE = '#E6D39A';
+
+export default function BannerCarousel({ banners }) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (!banners?.length) return;
+    const t = setInterval(() => setIndex((i) => (i + 1) % banners.length), 4500);
+    return () => clearInterval(t);
+  }, [banners]);
+
+  if (!banners?.length) return null;
+
+  return (
+    <section className="relative w-full overflow-hidden" style={{ background: CREAM }}>
+      {/*
+        One image for all screen sizes (recommended upload: 1920 x 810 px).
+        The box keeps the same aspect ratio on every device, so on mobile it
+        simply scales down and the WHOLE image stays visible.
+        - mobile:  object-contain -> never crops, even if the ratio is slightly off
+        - desktop: object-cover   -> fills the box edge to edge
+      */}
+      <div className="relative w-full aspect-[1920/810]">
+        {banners.map((b, i) => (
+          <Link
+            key={b._id}
+            href={b.link || '#'}
+            className={`absolute inset-0 block transition-opacity duration-700 ${
+              i === index ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            } ${!b.link ? 'pointer-events-none' : ''}`}
+            tabIndex={i === index ? 0 : -1}
+            aria-hidden={i !== index}
+          >
+            <img
+              src={b.image}
+              alt={b.title || 'Banner'}
+              className="absolute inset-0 w-full h-full object-contain object-center sm:object-cover"
+            />
+          </Link>
+        ))}
+
+        {banners.length > 1 && (
+          <>
+            {/* Arrows — white with navy icon and a thin gold outline so they read on any banner image */}
+            <button
+              onClick={() => setIndex((i) => (i - 1 + banners.length) % banners.length)}
+              className="absolute left-2 sm:left-5 top-1/2 -translate-y-1/2 p-1 sm:p-2 rounded-full transition z-10 hover:bg-[#F8F6EF]"
+              style={{
+                background: 'rgba(255,255,255,0.95)',
+                color: NAVY_DARK,
+                border: `1px solid ${GOLD}`,
+                boxShadow: '0 2px 8px rgba(7, 26, 58, 0.15)',
+              }}
+              aria-label="Previous"
+            >
+              <ChevronLeft size={14} strokeWidth={1.5} />
+            </button>
+            <button
+              onClick={() => setIndex((i) => (i + 1) % banners.length)}
+              className="absolute right-2 sm:right-5 top-1/2 -translate-y-1/2 p-1 sm:p-2 rounded-full transition z-10 hover:bg-[#F8F6EF]"
+              style={{
+                background: 'rgba(255,255,255,0.95)',
+                color: NAVY_DARK,
+                border: `1px solid ${GOLD}`,
+                boxShadow: '0 2px 8px rgba(7, 26, 58, 0.15)',
+              }}
+              aria-label="Next"
+            >
+              <ChevronRight size={14} strokeWidth={1.5} />
+            </button>
+
+            {/* Thin dash indicators */}
+            <div className="absolute bottom-2 sm:bottom-5 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+              {banners.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setIndex(i)}
+                  className="rounded-full transition-all"
+                  style={{
+                    height: '3px',
+                    width: i === index ? '22px' : '10px',
+                    background: i === index ? GOLD : GOLD_PALE,
+                    // Navy halo keeps the dashes visible over light or dark banner images
+                    boxShadow:
+                      i === index
+                        ? '0 0 0 1px rgba(7, 26, 58, 0.45)'
+                        : '0 0 0 1px rgba(7, 26, 58, 0.25)',
+                  }}
+                  aria-label={`Go to slide ${i + 1}`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
