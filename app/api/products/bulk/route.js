@@ -8,6 +8,7 @@ import { requireAdmin } from '@/lib/apiAuth';
 // POST /api/products/bulk
 // body: {
 //   category, skuPrefix, description, fabric,
+//   weight (grams per piece, required),
 //   price, compareAtPrice, sizes: [{ size, stock }],
 //   images: [url, url, ...], tags,
 //   isReadyToShip, sizeChart: [url, url, ...],
@@ -22,8 +23,9 @@ import { requireAdmin } from '@/lib/apiAuth';
 // - SKU = admin-typed short code + zero-padded number, e.g. "MT" -> MT001, MT002...
 //   (continues from the highest existing SKU with that code, globally,
 //   since SKU is a global-unique field)
-// - isReadyToShip / sizeChart / sleeveOptions / zipOptions, if provided, are
+// - weight / isReadyToShip / sizeChart / sleeveOptions / zipOptions, if provided, are
 //   applied identically to every product created in this batch.
+//   weight is the per-piece shipping weight in grams and is required.
 //   sizeChart is optional — if omitted, the storefront falls back to the
 //   category's own size chart images. sleeveOptions/zipOptions are optional
 //   product-level attributes — if omitted, no sleeve/zip selector shows on
@@ -40,6 +42,7 @@ export const POST = requireAdmin(async (req) => {
       skuPrefix,
       description = '',
       fabric = '',
+      weight = 0,
       price,
       compareAtPrice = 0,
       sizes = [],
@@ -62,6 +65,9 @@ export const POST = requireAdmin(async (req) => {
     }
     if (!price || Number(price) <= 0) {
       return NextResponse.json({ error: 'Price is required' }, { status: 400 });
+    }
+    if (!weight || Number(weight) <= 0) {
+      return NextResponse.json({ error: 'Weight (grams) is required' }, { status: 400 });
     }
     const sizeEntries = (sizes || [])
       .filter((s) => s.size)
@@ -175,6 +181,7 @@ export const POST = requireAdmin(async (req) => {
           description,
           category: cat._id,
           fabric,
+          weight: Number(weight),
           tags,
           variants: [variant],
           basePrice: Number(price),

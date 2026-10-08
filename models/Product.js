@@ -41,6 +41,11 @@ const ProductSchema = new mongoose.Schema(
     description: { type: String, default: '' },
     category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
     fabric: { type: String, default: '' },
+
+    // Shipping weight of ONE piece, in grams. Used to compute order weight
+    // for shipping. 0 = not set → falls back to Settings.weightPerPiece.
+    weight: { type: Number, default: 0, min: 0 },
+
     tags: [{ type: String }],
     variants: [VariantSchema],
 

@@ -6,6 +6,7 @@ import Script from 'next/script';
 import toast from 'react-hot-toast';
 import { useCart, cartKey } from '@/components/CartContext';
 import { formatINR } from '@/lib/utils';
+import { INDIAN_STATES } from '@/lib/indianStates';
 
 // Palette: 60% white/cream · 25% navy · 10% gold · 5% pale gold
 // Keep in sync with the other storefront components.
@@ -65,8 +66,8 @@ export default function CheckoutPage() {
   const discountedSubtotal = subtotal - discount;
   const total = shipping !== null ? Math.round(discountedSubtotal + shipping) : null;
 
-  // Total piece count across the cart — used by the shipping API to work
-  // out order weight (totalQty × weight-per-piece from admin Settings).
+  // Total piece count across the cart — sent as a fallback; the server
+  // normally computes weight from each product's own weight (grams).
   const totalQty = items.reduce((sum, i) => sum + (i.qty || 0), 0);
 
   const fetchShipping = useCallback(async () => {
@@ -75,7 +76,19 @@ export default function CheckoutPage() {
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subtotal: discountedSubtotal, totalQty })
+        body: JSON.stringify({
+          subtotal: discountedSubtotal,
+          totalQty,
+          // State selects the admin's state-wise shipping rate.
+          state: form.state,
+          // The server looks up each product's weight from these lines.
+          items: items.map((i) => ({
+            productId: i.productId,
+            qty: i.qty,
+            isCombo: i.isCombo || false,
+            comboId: i.comboId
+          }))
+        })
       });
       const data = await res.json();
       if (res.ok) {
@@ -89,7 +102,7 @@ export default function CheckoutPage() {
     } finally {
       setShippingLoading(false);
     }
-  }, [discountedSubtotal, totalQty]);
+  }, [discountedSubtotal, totalQty, items, form.state]);
 
   useEffect(() => { fetchShipping(); }, [fetchShipping]);
 
@@ -154,7 +167,7 @@ export default function CheckoutPage() {
   }
 
   async function placeOrder() {
-    if (!form.name || !form.phone || !form.line1 || !form.city || !form.pincode) {
+    if (!form.name || !form.phone || !form.line1 || !form.city || !form.state || !form.pincode) {
       toast.error('Please fill all required fields'); return;
     }
     if (items.length === 0) { toast.error('Your cart is empty'); return; }
@@ -322,13 +335,17 @@ export default function CheckoutPage() {
                 onChange={(e) => update('city', e.target.value)}
                 className={inputClass}
               />
-              <input
-                placeholder="State"
+              <select
                 autoComplete="address-level1"
                 value={form.state}
                 onChange={(e) => update('state', e.target.value)}
-                className={inputClass}
-              />
+                className={`${inputClass} ${form.state ? '' : 'text-[#102A56]/45'}`}
+              >
+                <option value="">State *</option>
+                {INDIAN_STATES.map((s) => (
+                  <option key={s} value={s} className="text-[#071A3A]">{s}</option>
+                ))}
+              </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <input

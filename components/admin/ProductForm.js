@@ -265,7 +265,7 @@ export default function ProductForm({ initial, productId }) {
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState(() => {
     const base = initial || {
-      name: '', slug: '', sku: '', description: '', category: '', fabric: '', tags: [],
+      name: '', slug: '', sku: '', description: '', category: '', fabric: '', weight: '', tags: [],
       variants: [emptyVariant()],
       sizeChart: [],
       videos: [],
@@ -278,6 +278,9 @@ export default function ProductForm({ initial, productId }) {
     };
     return {
       ...base,
+      // Existing products saved before weight existed have 0 / undefined —
+      // show the field empty so the admin is prompted to fill it in.
+      weight: base.weight > 0 ? base.weight : '',
       sizeChart: normalizeSizeChart(base.sizeChart),
       videos: base.videos || [],
       sleeveOptions: base.sleeveOptions || [],
@@ -449,11 +452,18 @@ export default function ProductForm({ initial, productId }) {
 
   async function submit(e) {
     e.preventDefault();
+
+    if (!form.weight || Number(form.weight) <= 0) {
+      toast.error('Enter the product weight in grams (used for shipping)');
+      return;
+    }
+
     setSaving(true);
     // Note: sku is intentionally omitted — it's auto-generated/managed server-side
     // based on the product's category (see /api/products and /api/products/[id]).
     const payload = {
       ...form,
+      weight: Number(form.weight) || 0,
       sizeChart: form.sizeChart || [],
       videos: form.videos || [],
       sleeveOptions: form.sleeveOptions || [],
@@ -548,6 +558,20 @@ export default function ProductForm({ initial, productId }) {
               style={inputStyle}
               value={form.fabric}
               onChange={(e) => update('fabric', e.target.value)}
+              onFocus={(e) => (e.target.style.borderColor = PEACH)}
+              onBlur={(e) => (e.target.style.borderColor = LINE)}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Weight per piece (grams) *</label>
+            <input
+              required
+              type="number"
+              min="1"
+              placeholder="e.g. 250"
+              style={inputStyle}
+              value={form.weight ?? ''}
+              onChange={(e) => update('weight', e.target.value)}
               onFocus={(e) => (e.target.style.borderColor = PEACH)}
               onBlur={(e) => (e.target.style.borderColor = LINE)}
             />

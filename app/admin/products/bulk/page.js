@@ -14,6 +14,7 @@ export default function BulkAddProductsPage() {
   const [skuPrefix, setSkuPrefix] = useState(''); // short code used to build SKUs, e.g. "MT" -> MT001
   const [description, setDescription] = useState('');
   const [fabric, setFabric] = useState('');
+  const [weight, setWeight] = useState(''); // grams per piece, used for shipping
   const [price, setPrice] = useState('');
   const [compareAtPrice, setCompareAtPrice] = useState('');
   const [stockBySize, setStockBySize] = useState({}); // { S: 10, M: 10, ... }
@@ -144,6 +145,7 @@ export default function BulkAddProductsPage() {
     if (!category) return toast.error('Select a category');
     if (!skuPrefix.trim()) return toast.error('Enter a SKU code (e.g. MT)');
     if (!price || Number(price) <= 0) return toast.error('Enter a valid price');
+    if (!weight || Number(weight) <= 0) return toast.error('Enter a valid weight in grams');
     if (files.length === 0) return toast.error('Add at least one image');
 
     // Combine predefined-size stock and manually-added sizes
@@ -180,6 +182,7 @@ export default function BulkAddProductsPage() {
           skuPrefix,
           description,
           fabric,
+          weight: Number(weight),
           price: Number(price),
           compareAtPrice: Number(compareAtPrice) || 0,
           sizes,
@@ -218,7 +221,7 @@ export default function BulkAddProductsPage() {
     <div className="max-w-3xl">
       <h1 className="font-display text-2xl font-bold text-brand-magenta mb-1">Bulk Add Products</h1>
       <p className="text-sm text-brand-ink/50 mb-6">
-        One category, description, and fabric applied to every product. Each image you upload becomes
+        One category, description, fabric, and weight applied to every product. Each image you upload becomes
         its own product — titles are generated automatically from the category, and SKUs from the code below.
         Pant/Shawl add-on options can be set afterward from each product's own edit page.
       </p>
@@ -282,21 +285,38 @@ export default function BulkAddProductsPage() {
           </div>
         </div>
 
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Fabric</label>
+            <input
+              value={fabric}
+              onChange={(e) => setFabric(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-brand-ink/10 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Weight per piece (grams)</label>
+            <input
+              type="number"
+              min="1"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              placeholder="e.g. 250"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-brand-ink/10 outline-none"
+              required
+            />
+            <p className="text-xs text-brand-ink/40 mt-1">
+              Used to calculate shipping. Applied to every product in this batch.
+            </p>
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-medium mb-1">Description</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            className="w-full px-3 py-2 text-sm rounded-lg border border-brand-ink/10 outline-none"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Fabric</label>
-          <input
-            value={fabric}
-            onChange={(e) => setFabric(e.target.value)}
             className="w-full px-3 py-2 text-sm rounded-lg border border-brand-ink/10 outline-none"
           />
         </div>

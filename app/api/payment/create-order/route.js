@@ -10,6 +10,9 @@ import { buildOrderItemsAndTotals, OrderError } from '@/lib/orderCalc';
 // even if the customer's browser never calls back, then creates the
 // Razorpay order for the verified total.
 //
+// Shipping is calculated from the cart's weight and the state in
+// shippingAddress.state (state-wise rates set by the admin in Settings).
+//
 // `expectedTotal` is the total the customer saw on the checkout page.
 // It is NOT used as the charge amount — only compared against the server
 // total so a mismatch is caught before the Razorpay popup opens.
@@ -23,10 +26,15 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Name and phone are required' }, { status: 400 });
     }
 
-    const { subtotal, discount, shippingFee, total } = await buildOrderItemsAndTotals(items, couponCode);
+    const { subtotal, discount, shippingFee, total } = await buildOrderItemsAndTotals(
+      items,
+      couponCode,
+      shippingAddress?.state
+    );
 
     if (process.env.NODE_ENV !== 'production') {
       console.log('CREATE-ORDER DEBUG', {
+        state: shippingAddress?.state,
         subtotal,
         discount,
         shippingFee,
