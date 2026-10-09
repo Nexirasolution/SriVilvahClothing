@@ -26,7 +26,7 @@ const PANEL = CREAM;                      // dropdowns + mobile overlay
 
 const ENQUIRY_LINKS = [
   { label: 'Bulk Order Enquiry', href: '/bulk-enquiry' },
-  { label: 'Contact Us', href: '/contact' },
+  // { label: 'Contact Us', href: '/contact' },
 ];
 
 // Gold text is hard to read on white/cream, so hover/active states use a gold
