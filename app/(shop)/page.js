@@ -1,18 +1,20 @@
-export const dynamic = 'force-dynamic';
+// Cached homepage (ISR). Rendered once, then served as static HTML and
+// re-built in the background at most every 5 minutes. Admin edits can show up
+// instantly by calling revalidatePath('/') from the admin API routes.
+// NOTE: the DB must be reachable at `next build` time (the page is generated then).
+export const revalidate = 300;
+
 import { dbConnect } from '@/lib/mongodb';
 import Banner from '@/models/Banner';
 import Product from '@/models/Product';
 import Review from '@/models/Review';
-import Reel from '@/models/Reel';
 import Combo from '@/models/Combo';
 import Category from '@/models/Category';
 import BannerCarousel from '@/components/BannerCarousel';
 import ProductCard from '@/components/ProductCard';
 import ReviewSection from '@/components/ReviewSection';
-import ReelsSection from '@/components/ReelsSection';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { formatINR } from '@/lib/utils';
 import { ArrowRight, Tag } from 'lucide-react';
 
@@ -34,48 +36,47 @@ const INK_SOFT = '#5B6B88';     // muted navy-grey for secondary copy
 const HAIRLINE = GOLD_LIGHT;    // borders & dividers
 const GOLD_WASH = CREAM;        // placeholder fills when an image is missing
 
-// Minimalist type: a clean, quiet sans. Headings are bold + tracked out;
-// body copy stays light so the boldness reads as intentional, not noisy.
 const FONT_SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif";
-// Premium editorial serif — reserved for the hero headline and tagline only,
-// so it reads as a deliberate accent rather than a full type-system change.
-const FONT_SERIF = "Georgia, 'Times New Roman', serif";
 
 // Featured Collection shows a teaser, not the full catalog
 const FEATURED_LIMIT = 6;
 
+// Only the combo fields this page actually renders — keeps the payload small.
+const COMBO_FIELDS = 'name slug type packOptions comboPrice originalPrice images image';
+const CATEGORY_FIELDS = 'name slug image';
+
+// Fetch only what is rendered below. (bestSellers, topSellers and reels were
+// fetched before but never displayed — removed to save 3 DB queries per render.)
 async function getData() {
   await dbConnect();
-  const [banners, bestSellers, topSellers, activeSellers, reviews, reels, combos, categories] = await Promise.all([
+  const [banners, newArrivals, reviews, combos, categories] = await Promise.all([
     Banner.find({ isActive: true }).sort({ sortOrder: 1 }).lean(),
-    Product.find({ isActive: true, isBestSeller: true }).limit(12).lean(),
-    Product.find({ isActive: true, isTopSeller: true }).limit(12).lean(),
-    Product.find({ isActive: true, isActiveSeller: true }).sort({ createdAt: -1 }).limit(12).lean(),
+    // Limit in the query, not after fetching 12 and slicing to 6.
+    Product.find({ isActive: true, isActiveSeller: true })
+      .sort({ createdAt: -1 })
+      .limit(FEATURED_LIMIT)
+      .lean(),
     Review.find({ isApproved: true, isFeatured: true }).populate('product', 'name').limit(10).lean(),
-    Reel.find({ isActive: true }).sort({ sortOrder: 1 }).populate('product', 'name slug').limit(10).lean(),
-    Combo.find({ isActive: true }).limit(6).lean(),
-    // Only main categories here — subcategories are excluded from the
-    // homepage "Shop by Category" grid, which only ever links straight
-    // into a single category page (no drill-down UI on that page anymore).
-    Category.find({ isActive: true, parent: null }).limit(10).lean(),
+    Combo.find({ isActive: true }).select(COMBO_FIELDS).limit(6).lean(),
+    // Main categories only — subcategories are excluded from the homepage grid.
+    Category.find({ isActive: true, parent: null }).select(CATEGORY_FIELDS).limit(10).lean(),
   ]);
-  return { banners, bestSellers, topSellers, activeSellers, reviews, reels, combos, categories };
+
+  // One serialization pass (ObjectId / Date -> plain JSON for client components).
+  return JSON.parse(JSON.stringify({ banners, newArrivals, reviews, combos, categories }));
 }
 
 export default async function HomePage() {
-  const { banners, bestSellers, topSellers, activeSellers, reviews, reels, combos, categories } = await getData();
-  const plainCombos = JSON.parse(JSON.stringify(combos));
-  const plainCategories = JSON.parse(JSON.stringify(categories));
-  const plainNewArrivals = JSON.parse(JSON.stringify(activeSellers)).slice(0, FEATURED_LIMIT);
+  const { banners, newArrivals, reviews, combos, categories } = await getData();
 
   return (
     <div className="overflow-x-hidden" style={{ background: WHITE }}>
 
       {/* Banner */}
-      <BannerCarousel banners={JSON.parse(JSON.stringify(banners))} />
+      <BannerCarousel banners={banners} />
 
       {/* Shop by Category — cream band */}
-      {plainCategories?.length > 0 && (
+      {categories.length > 0 && (
         <section style={{ background: CREAM }}>
           <div className="max-w-6xl mx-auto px-4 pt-14 pb-10">
             <h2
@@ -93,7 +94,7 @@ export default async function HomePage() {
             </div>
 
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4 sm:gap-6">
-              {plainCategories.map((c) => (
+              {categories.map((c) => (
                 <Link
                   key={c._id}
                   href={`/category/${c.slug}`}
@@ -108,6 +109,10 @@ export default async function HomePage() {
                       <img
                         src={c.image}
                         alt={c.name}
+                        width={96}
+                        height={96}
+                        loading="lazy"
+                        decoding="async"
                         className="absolute inset-0 w-full h-full object-cover"
                       />
                     ) : (
@@ -138,10 +143,9 @@ export default async function HomePage() {
           Featured Collection
         </h2>
 
-        {/* Narrowed from 6 columns to 2/3/4 so each ProductCard renders large */}
-        {plainNewArrivals.length > 0 && (
+        {newArrivals.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 sm:gap-8 mt-8 text-left">
-            {plainNewArrivals.map((p) => (
+            {newArrivals.map((p) => (
               <ProductCard key={p._id} product={p} />
             ))}
           </div>
@@ -158,7 +162,7 @@ export default async function HomePage() {
       </section>
 
       {/* Combo Offers — deep navy band (the main navy moment on the page) */}
-      {plainCombos?.length > 0 && (
+      {combos.length > 0 && (
         <section className="py-16" style={{ background: NAVY_DEEP }}>
           <div className="max-w-6xl mx-auto px-4">
             <div className="flex flex-col items-center text-center mb-8">
@@ -187,15 +191,14 @@ export default async function HomePage() {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-5">
-              {plainCombos.map((c) => {
+              {combos.map((c) => {
                 const isColorPack = c.type === 'color-pack';
                 const cheapestPack = isColorPack && c.packOptions?.length
                   ? c.packOptions.reduce((min, p) => (p.price < min.price ? p : min), c.packOptions[0])
                   : null;
 
                 // Support both the current `images[]` array and, defensively, a
-                // legacy singular `image` field on any older documents that
-                // haven't been re-saved since the schema migration.
+                // legacy singular `image` field on older documents.
                 const cover = c.images?.[0] || c.image;
 
                 const displayPrice = isColorPack ? cheapestPack?.price ?? 0 : c.comboPrice;
@@ -216,6 +219,10 @@ export default async function HomePage() {
                         <img
                           src={cover}
                           alt={c.name}
+                          width={400}
+                          height={400}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
                       ) : (
@@ -284,10 +291,7 @@ export default async function HomePage() {
       )}
 
       {/* Reviews */}
-      <ReviewSection reviews={JSON.parse(JSON.stringify(reviews))} />
-
-      {/* Reels */}
-      {/* <ReelsSection reels={JSON.parse(JSON.stringify(reels))} /> */}
+      <ReviewSection reviews={reviews} />
 
     </div>
   );

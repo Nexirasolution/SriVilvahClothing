@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Heart, ShoppingBag, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -31,6 +30,21 @@ const FONT_SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif";
 // so those cards send the shopper to the product page instead.
 // Adjust these field names if your Product model calls them something else.
 const OPTION_FIELDS = ['sleeveOptions', 'zipOptions'];
+
+// ---------------------------------------------------------------------------
+// Image sizing — no server CPU involved.
+// If the image is on Cloudinary, ask the CDN for a resized WebP/AVIF copy
+// (f_auto,q_auto) instead of the full-size upload. Any other URL (including
+// /placeholder.png) is returned untouched.
+// ---------------------------------------------------------------------------
+function resizeImage(url, width) {
+  if (typeof url !== 'string' || !url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
+    return url;
+  }
+  return url.replace('/upload/', `/upload/f_auto,q_auto,c_limit,w_${width}/`);
+}
+
+const IMG_SIZES = '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw';
 
 // ---------------------------------------------------------------------------
 // Action buttons
@@ -99,7 +113,7 @@ export default function ProductCard({ product }) {
       slug: product.slug,
       variantId: variant?._id,
       name: product.name,
-      image,
+      image, // original URL — the cart keeps the full-quality image
       color: variant?.color || '-',
       colorHex: variant?.colorHex,
       size: selectedSize,
@@ -135,12 +149,18 @@ export default function ProductCard({ product }) {
       <div className="relative">
         <Link href={href} className="block" aria-label={product.name}>
           <div className="relative aspect-[3/4] overflow-hidden" style={{ background: CREAM }}>
-            <Image
-              src={image}
+            {/* Plain <img>: lazy-loaded, sized by the CDN, zero server CPU
+                (next/image would resize every picture on your own server). */}
+            <img
+              src={resizeImage(image, 600)}
+              srcSet={`${resizeImage(image, 400)} 400w, ${resizeImage(image, 600)} 600w, ${resizeImage(image, 900)} 900w`}
+              sizes={IMG_SIZES}
               alt={product.name}
-              fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-              className={`object-cover ${outOfStock ? 'grayscale opacity-70' : ''}`}
+              width={600}
+              height={800}
+              loading="lazy"
+              decoding="async"
+              className={`absolute inset-0 w-full h-full object-cover ${outOfStock ? 'grayscale opacity-70' : ''}`}
             />
           </div>
         </Link>
