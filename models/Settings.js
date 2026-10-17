@@ -27,6 +27,19 @@ const SettingsSchema = new mongoose.Schema(
     // 0 means "free shipping disabled".
     freeShippingAbove: { type: Number, default: 0 },
 
+    // State-wise overrides. A rule applies to customers in `state`.
+    // pricePerKg / freeShippingAbove of 0 mean "use the global value".
+    // NOTE: this MUST be in the schema — Mongoose strict mode silently
+    // drops any field that isn't declared here.
+    stateShipping: [
+      {
+        _id: false,
+        state: { type: String, required: true },
+        pricePerKg: { type: Number, default: 0 },
+        freeShippingAbove: { type: Number, default: 0 }
+      }
+    ],
+
     seoTitle: { type: String },
     seoDescription: { type: String }
   },
