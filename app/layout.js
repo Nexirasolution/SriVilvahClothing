@@ -22,7 +22,7 @@ export async function generateMetadata() {
   const description =
     settings?.seoDescription ||
     'Shop authentic women kurtis, nighties, innerwear and trending collections online from Sri Vivah Clothings.';
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://ssrkcollections.com';
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'srivilvahclothing.co.in';
   return {
     title: { default: title, template: '%s | Sri Vilvah Clothings' },
     description,
