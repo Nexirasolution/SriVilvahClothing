@@ -16,6 +16,7 @@ import ReviewSection from '@/components/ReviewSection';
 
 import Link from 'next/link';
 import { formatINR } from '@/lib/utils';
+import { resizeImage, buildSrcSet } from '@/lib/image';
 import { ArrowRight, Tag } from 'lucide-react';
 
 // Design tokens — white / navy / gold theme
@@ -30,40 +31,60 @@ const NAVY_DEEP = '#071A3A';
 const GOLD = '#C9A227';
 const GOLD_LIGHT = '#E6D39A';
 
-// Text + utility colours derived from the palette
-const INK = NAVY_DEEP;          // headings / primary text
-const INK_SOFT = '#5B6B88';     // muted navy-grey for secondary copy
-const HAIRLINE = GOLD_LIGHT;    // borders & dividers
-const GOLD_WASH = CREAM;        // placeholder fills when an image is missing
+const INK = NAVY_DEEP;
+const INK_SOFT = '#5B6B88';
+const HAIRLINE = GOLD_LIGHT;
+const GOLD_WASH = CREAM;
 
 const FONT_SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif";
 
-// Featured Collection shows a teaser, not the full catalog
 const FEATURED_LIMIT = 6;
 
-// Only the combo fields this page actually renders — keeps the payload small.
+// Only the fields this page renders — keeps DB reads and the page payload small.
 const COMBO_FIELDS = 'name slug type packOptions comboPrice originalPrice images image';
 const CATEGORY_FIELDS = 'name slug image';
+// Everything ProductCard reads. If ProductCard starts using another field,
+// add it here.
+const PRODUCT_FIELDS = 'name slug basePrice sleeveOptions zipOptions variants';
 
-// Fetch only what is rendered below. (bestSellers, topSellers and reels were
-// fetched before but never displayed — removed to save 3 DB queries per render.)
+// Responsive image hints for the combo grid (2 cols mobile, 3 cols desktop)
+const COMBO_WIDTHS = [300, 450, 700];
+const COMBO_SIZES = '(max-width: 640px) 50vw, 33vw';
+
+// ProductCard only displays the FIRST variant and its FIRST image, so don't
+// ship every colour/image of every product into the page HTML.
+function slimProduct(p) {
+  const v = p.variants?.[0];
+  return {
+    ...p,
+    variants: v ? [{ ...v, images: (v.images || []).slice(0, 1) }] : [],
+  };
+}
+
 async function getData() {
   await dbConnect();
   const [banners, newArrivals, reviews, combos, categories] = await Promise.all([
     Banner.find({ isActive: true }).sort({ sortOrder: 1 }).lean(),
-    // Limit in the query, not after fetching 12 and slicing to 6.
     Product.find({ isActive: true, isActiveSeller: true })
       .sort({ createdAt: -1 })
       .limit(FEATURED_LIMIT)
+      .select(PRODUCT_FIELDS)
       .lean(),
     Review.find({ isApproved: true, isFeatured: true }).populate('product', 'name').limit(10).lean(),
     Combo.find({ isActive: true }).select(COMBO_FIELDS).limit(6).lean(),
-    // Main categories only — subcategories are excluded from the homepage grid.
     Category.find({ isActive: true, parent: null }).select(CATEGORY_FIELDS).limit(10).lean(),
   ]);
 
   // One serialization pass (ObjectId / Date -> plain JSON for client components).
-  return JSON.parse(JSON.stringify({ banners, newArrivals, reviews, combos, categories }));
+  return JSON.parse(
+    JSON.stringify({
+      banners,
+      newArrivals: newArrivals.map(slimProduct),
+      reviews,
+      combos,
+      categories,
+    })
+  );
 }
 
 export default async function HomePage() {
@@ -86,7 +107,6 @@ export default async function HomePage() {
               Shop by Category
             </h2>
 
-            {/* Short gold rule under the heading */}
             <div className="flex items-center justify-center gap-3 mt-4 mb-8">
               <span style={{ width: '28px', height: '1px', background: GOLD_LIGHT }} />
               <span className="w-1 h-1 rounded-full" style={{ background: GOLD }} />
@@ -100,14 +120,14 @@ export default async function HomePage() {
                   href={`/category/${c.slug}`}
                   className="group flex flex-col items-center text-center"
                 >
-                  {/* Circular image */}
                   <div
                     className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden transition-transform duration-300 group-hover:scale-105"
                     style={{ border: `1px solid ${GOLD}`, background: WHITE }}
                   >
                     {c.image ? (
                       <img
-                        src={c.image}
+                        // 96px circle -> a 200px square crop covers retina screens
+                        src={resizeImage(c.image, 200, 200)}
                         alt={c.name}
                         width={96}
                         height={96}
@@ -120,7 +140,6 @@ export default async function HomePage() {
                     )}
                   </div>
 
-                  {/* Label */}
                   <span
                     className="mt-2 text-[10.5px] sm:text-[11px] font-bold tracking-wide leading-tight line-clamp-2 max-w-[80px]"
                     style={{ color: NAVY, fontFamily: FONT_SANS }}
@@ -134,7 +153,7 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* Featured collection — white, up to 6 New Arrivals, CTA */}
+      {/* Featured collection */}
       <section className="max-w-6xl mx-auto px-4 pt-12 sm:pt-14 pb-16 text-center">
         <h2
           className="text-lg sm:text-xl font-bold tracking-[3px] uppercase"
@@ -151,7 +170,6 @@ export default async function HomePage() {
           </div>
         )}
 
-        {/* Colors live in classes (not inline style) so the hover state can override them */}
         <Link
           href="/products"
           className="inline-block mt-10 px-8 py-3 text-[12px] font-bold tracking-[2px] uppercase transition-colors bg-[#102A56] text-[#C9A227] border border-[#C9A227] hover:bg-[#C9A227] hover:text-[#071A3A]"
@@ -161,7 +179,7 @@ export default async function HomePage() {
         </Link>
       </section>
 
-      {/* Combo Offers — deep navy band (the main navy moment on the page) */}
+      {/* Combo Offers */}
       {combos.length > 0 && (
         <section className="py-16" style={{ background: NAVY_DEEP }}>
           <div className="max-w-6xl mx-auto px-4">
@@ -197,8 +215,6 @@ export default async function HomePage() {
                   ? c.packOptions.reduce((min, p) => (p.price < min.price ? p : min), c.packOptions[0])
                   : null;
 
-                // Support both the current `images[]` array and, defensively, a
-                // legacy singular `image` field on older documents.
                 const cover = c.images?.[0] || c.image;
 
                 const displayPrice = isColorPack ? cheapestPack?.price ?? 0 : c.comboPrice;
@@ -213,14 +229,15 @@ export default async function HomePage() {
                     className="group relative overflow-hidden transition-colors"
                     style={{ background: WHITE, border: `1px solid ${GOLD}` }}
                   >
-                    {/* Image */}
                     <div className="relative w-full aspect-square overflow-hidden" style={{ background: CREAM }}>
                       {cover ? (
                         <img
-                          src={cover}
+                          src={resizeImage(cover, 450)}
+                          srcSet={buildSrcSet(cover, COMBO_WIDTHS)}
+                          sizes={COMBO_SIZES}
                           alt={c.name}
-                          width={400}
-                          height={400}
+                          width={450}
+                          height={450}
                           loading="lazy"
                           decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -246,7 +263,6 @@ export default async function HomePage() {
                       )}
                     </div>
 
-                    {/* Info */}
                     <div className="p-3" style={{ borderTop: `1px solid ${HAIRLINE}` }}>
                       <p
                         className="text-[13px] font-bold tracking-wide line-clamp-1"

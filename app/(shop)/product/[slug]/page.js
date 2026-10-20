@@ -3,23 +3,21 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { Fraunces, Inter } from 'next/font/google';
-import { Star, ShoppingBag, Zap, Heart, Share2, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ShoppingBag, Zap, Heart, Share2, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { formatINR } from '@/lib/utils';
 import { getSizeStock, getCombinedStock } from '@/lib/stock';
+import { resizeImage, buildSrcSet } from '@/lib/image';
 import { useCart } from '@/components/CartContext';
 import ColorSizeSelector from '@/components/ColorSizeSelector';
 import ProductCard from '@/components/ProductCard';
 import toast from 'react-hot-toast';
 
-// Typography — a deliberate pairing instead of system defaults: Fraunces
-// for anything read as a headline, Inter for everything functional/UI.
-const display = Fraunces({ subsets: ['latin'], weight: ['400', '500'], style: ['normal', 'italic'], variable: '--font-display' });
-const body = Inter({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-body' });
+// Typography — Fraunces for headlines, Inter for UI.
+const display = Fraunces({ subsets: ['latin'], weight: ['400', '500'], style: ['normal', 'italic'], variable: '--font-display', display: 'swap' });
+const body = Inter({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-body', display: 'swap' });
 
 // Palette: 60% white/cream · 25% navy · 10% gold · 5% pale gold
-// Keep in sync with the other storefront components.
 const PAPER = '#FFFFFF';
 const CREAM = '#F8F6EF';
 const NAVY = '#102A56';
@@ -28,15 +26,38 @@ const GOLD = '#C9A227';
 const GOLD_PALE = '#E6D39A';
 
 const INK = NAVY_DARK;
-const GREY = 'rgba(16, 42, 86, 0.70)';     // secondary text (navy tint)
-const NEUTRAL = 'rgba(16, 42, 86, 0.50)';  // struck-through prices
-const LINE = GOLD_PALE;                    // hairlines
+const GREY = 'rgba(16, 42, 86, 0.70)';
+const NEUTRAL = 'rgba(16, 42, 86, 0.50)';
+const LINE = GOLD_PALE;
 
-// Same styling as the primary buttons elsewhere on the site.
 const BTN_PRIMARY =
   'transition-colors active:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed bg-[#071A3A] text-[#E6D39A] border border-[#C9A227] hover:bg-[#C9A227] hover:text-[#071A3A]';
 const BTN_SECONDARY =
   'transition-colors active:opacity-70 disabled:opacity-40 disabled:cursor-not-allowed bg-white text-[#071A3A] border border-[#C9A227] hover:bg-[#F8F6EF]';
+
+// Widths requested from the CDN for the main gallery image.
+const MAIN_WIDTHS = [480, 720, 1080];
+const MAIN_SIZES = '(max-width: 640px) 100vw, 48vw';
+
+// Loading skeleton — shows the page shape instantly instead of a spinner.
+function ProductSkeleton() {
+  return (
+    <div className={`${body.className} min-h-screen`} style={{ background: PAPER }}>
+      <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-4 sm:pt-16">
+        <div className="grid sm:grid-cols-2 gap-4 sm:gap-16 animate-pulse">
+          <div className="w-full h-[38vh] sm:h-auto sm:aspect-[4/5]" style={{ background: CREAM, borderRadius: '4px' }} />
+          <div className="flex flex-col gap-4">
+            <div className="h-3 w-24" style={{ background: CREAM }} />
+            <div className="h-8 w-3/4" style={{ background: CREAM }} />
+            <div className="h-6 w-32" style={{ background: CREAM }} />
+            <div className="h-32 w-full" style={{ background: CREAM }} />
+            <div className="h-12 w-full" style={{ background: CREAM }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ProductPage() {
   const { slug } = useParams();
@@ -64,24 +85,39 @@ export default function ProductPage() {
     setMounted(true);
   }, []);
 
+  // Fetch with abort so a quick navigation never sets stale data.
   useEffect(() => {
-    fetch(`/api/products/${slug}`)
+    const controller = new AbortController();
+    setData(null);
+    fetch(`/api/products/${slug}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((d) => {
         setData(d);
         setActiveVariant(d.product?.variants?.[0]);
+        setActiveImage(0);
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') console.error(err);
       });
+    return () => controller.abort();
   }, [slug]);
 
+  // Warm the browser cache for the neighbouring gallery images so
+  // arrows / thumbnail taps feel instant.
+  const galleryImages = activeVariant?.images || [];
+  useEffect(() => {
+    if (galleryImages.length < 2) return;
+    const next = galleryImages[(activeImage + 1) % galleryImages.length];
+    const prev = galleryImages[(activeImage - 1 + galleryImages.length) % galleryImages.length];
+    [next, prev].forEach((src) => {
+      if (!src) return;
+      const img = new window.Image();
+      img.src = resizeImage(src, 720);
+    });
+  }, [activeImage, activeVariant]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!data?.product) {
-    return (
-      <div className={`${body.className} min-h-screen flex items-center justify-center`} style={{ background: PAPER }}>
-        <div className="flex flex-col items-center gap-3" style={{ color: GREY }}>
-          <div className="w-6 h-6 border rounded-full animate-spin" style={{ borderColor: LINE, borderTopColor: GOLD }} />
-          <p className="text-sm">Loading product…</p>
-        </div>
-      </div>
-    );
+    return <ProductSkeleton />;
   }
 
   const { product, reviews, related } = data;
@@ -90,15 +126,11 @@ export default function ProductPage() {
     ? Math.round(((activeVariant.compareAtPrice - activeVariant.price) / activeVariant.compareAtPrice) * 100)
     : 0;
 
-  // Product's own size chart images win; otherwise fall back to the
-  // category's. Requires GET /api/products/[slug] to populate
-  // category with `sizeChart`.
   const sizeChartImages = product.sizeChart?.length ? product.sizeChart : (product.category?.sizeChart || []);
 
   const selectedSizeStock = getSizeStock(activeVariant, activeSize);
   const sizeOutOfStock = !!activeSize && selectedSizeStock <= 0;
 
-  // Pant/shawl selections and the combined, add-on-inclusive unit price.
   const selectedPant = product.pantOptions?.find((p) => p._id === activePantId) || null;
   const selectedShawl = product.shawlOptions?.find((s) => s._id === activeShawlId) || null;
   const addonTotal = (selectedPant?.price || 0) + (selectedShawl?.price || 0);
@@ -178,7 +210,7 @@ export default function ProductPage() {
       variantId: activeVariant._id,
       comboId: null,
       name: product.name,
-      image: activeVariant.images?.[0],
+      image: activeVariant.images?.[0], // original URL — cart keeps full quality
       color: activeVariant.color,
       size: activeSize,
       sleeveType: activeSleeve,
@@ -195,58 +227,60 @@ export default function ProductPage() {
     };
   }
 
-  function handleAddToCart() {
-    if (!activeSize) { toast.error('Please select a size'); return; }
-    if (product.sleeveOptions?.length && !activeSleeve) { toast.error('Please select a sleeve type'); return; }
-    if (product.zipOptions?.length && !activeZip) { toast.error('Please select a zip type'); return; }
+  function validateSelection() {
+    if (!activeSize) { toast.error('Please select a size'); return false; }
+    if (product.sleeveOptions?.length && !activeSleeve) { toast.error('Please select a sleeve type'); return false; }
+    if (product.zipOptions?.length && !activeZip) { toast.error('Please select a zip type'); return false; }
     const stock = stockCap();
-    if (stock <= 0) { toast.error('This combination is out of stock'); return; }
+    if (stock <= 0) { toast.error('This combination is out of stock'); return false; }
     if (qty > stock) {
       toast.error(`Only ${stock} left in stock`);
       setQty(stock);
-      return;
+      return false;
     }
+    return true;
+  }
 
+  function handleAddToCart() {
+    if (!validateSelection()) return;
     addItem(buildCartPayload());
   }
 
   function handleBuyNow() {
-    if (!activeSize) { toast.error('Please select a size'); return; }
-    if (product.sleeveOptions?.length && !activeSleeve) { toast.error('Please select a sleeve type'); return; }
-    if (product.zipOptions?.length && !activeZip) { toast.error('Please select a zip type'); return; }
-    const stock = stockCap();
-    if (stock <= 0) { toast.error('This combination is out of stock'); return; }
-    if (qty > stock) {
-      toast.error(`Only ${stock} left in stock`);
-      setQty(stock);
-      return;
-    }
-
+    if (!validateSelection()) return;
     addItem(buildCartPayload());
     router.push('/checkout');
   }
+
+  const mainImage = images[activeImage];
 
   return (
     <div className={`${body.className} ${display.variable}`} style={{ background: PAPER }}>
       <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-4 sm:pt-16 pb-24 sm:pb-20">
 
-        {/* Even two-column split, generous gap, no sticky spine or gallery
-            chrome — the image and the details carry equal quiet weight. */}
         <div className="grid sm:grid-cols-2 gap-4 sm:gap-16">
 
           {/* ── Gallery ── */}
           <div className="sm:sticky sm:top-10 sm:self-start">
-            {/* Mobile: fixed viewport-relative height so the fold clears the
-                gallery quickly. Desktop: original aspect-ratio box. */}
-            <div className="relative w-full h-[38vh] sm:h-auto sm:aspect-[4/5] overflow-hidden" style={{ background: CREAM, borderRadius: '4px' }}>
-              {images[activeImage] && (
-                <Image
-                  src={images[activeImage]}
+            {/* The image fills the whole frame edge-to-edge (object-cover),
+                anchored to the top so faces / necklines are never cut off. */}
+            <div
+              className="relative w-full h-[38vh] sm:h-auto sm:aspect-[4/5] overflow-hidden"
+              style={{ background: CREAM, borderRadius: '4px' }}
+            >
+              {mainImage && (
+                <img
+                  key={mainImage}
+                  src={resizeImage(mainImage, 720)}
+                  srcSet={buildSrcSet(mainImage, MAIN_WIDTHS)}
+                  sizes={MAIN_SIZES}
                   alt={product.name}
-                  fill
-                  sizes="(max-width:640px) 100vw, 48vw"
-                  className="object-cover"
-                  priority
+                  width={720}
+                  height={900}
+                  fetchPriority="high"
+                  loading="eager"
+                  decoding="async"
+                  className="absolute inset-0 w-full h-full object-cover object-top"
                 />
               )}
 
@@ -267,10 +301,9 @@ export default function ProductPage() {
                     <ChevronRight size={18} strokeWidth={1.5} style={{ color: INK }} />
                   </button>
 
-                  {/* Plain numeric counter instead of dots or a pill */}
                   <div
-                    className="absolute bottom-3 right-3 text-[11px] font-medium tracking-wide"
-                    style={{ color: INK }}
+                    className="absolute bottom-3 right-3 text-[11px] font-medium tracking-wide px-2 py-0.5 rounded"
+                    style={{ color: INK, background: 'rgba(255,255,255,0.75)' }}
                   >
                     {String(activeImage + 1).padStart(2, '0')} / {String(images.length).padStart(2, '0')}
                   </div>
@@ -278,9 +311,7 @@ export default function ProductPage() {
               )}
             </div>
 
-            {/* Thumbnails — hidden on mobile to save above-the-fold space;
-                a thin gold underline marks the active one on desktop instead
-                of a ring/shadow */}
+            {/* Thumbnails — tiny 96x120 CDN crops instead of full-size images */}
             {images.length > 1 && (
               <div className="hidden sm:flex gap-3 mt-3">
                 {images.map((img, i) => (
@@ -294,15 +325,20 @@ export default function ProductPage() {
                       boxShadow: i === activeImage ? `inset 0 -2px 0 ${GOLD}` : 'none',
                     }}
                   >
-                    <Image src={img} alt="" fill className="object-cover" />
+                    <img
+                      src={resizeImage(img, 96, 120)}
+                      alt=""
+                      width={48}
+                      height={60}
+                      loading="lazy"
+                      decoding="async"
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
                   </button>
                 ))}
               </div>
             )}
 
-            {/* Wishlist / share — hidden on mobile (sticky bar covers the
-                key actions there); a plain text row under the image on
-                desktop, not floating chrome on top of it */}
             <div className="hidden sm:flex items-center gap-5 mt-4">
               <button
                 onClick={() => { setWished((w) => !w); toast.success(wished ? 'Removed from wishlist' : 'Added to wishlist'); }}
@@ -318,9 +354,8 @@ export default function ProductPage() {
               </button>
             </div>
 
-            {/* Product videos — shown below the gallery/thumbnails on both
-                mobile and desktop, since a try-on or drape clip is useful
-                regardless of screen size. */}
+            {/* Videos — preload="none" so they never compete with the images;
+                the browser only downloads when the shopper presses play. */}
             {product.videos?.length > 0 && (
               <div className="mt-4 flex flex-col gap-3">
                 {product.videos.map((url, i) => (
@@ -329,7 +364,7 @@ export default function ProductPage() {
                     src={url}
                     controls
                     playsInline
-                    preload="metadata"
+                    preload="none"
                     className="w-full"
                     style={{ borderRadius: '4px', background: CREAM }}
                   />
@@ -353,7 +388,6 @@ export default function ProductPage() {
               {product.name}
             </h1>
 
-            {/* Ready to Ship badge — highlighted, sits just under the title */}
             {product.isReadyToShip && (
               <span
                 className="inline-block mt-2 sm:mt-2.5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide w-fit"
@@ -363,15 +397,6 @@ export default function ProductPage() {
               </span>
             )}
 
-            {/* <div className="flex items-center gap-1.5 mt-1.5 sm:mt-2.5 text-sm" style={{ color: GREY }}>
-              <Star size={13} strokeWidth={1.5} style={{ fill: GOLD, color: GOLD }} />
-              <span style={{ color: INK }}>{product.rating?.toFixed?.(1) ?? product.rating}</span>
-              <span>· {product.reviewCount} reviews</span>
-            </div> */}
-
-            {/* Price now reflects the base variant price PLUS whichever
-                pant/shawl add-ons are currently selected, so it updates
-                live as the customer changes those selectors below. */}
             <div className="flex items-baseline gap-3 mt-3 sm:mt-6">
               <span className={`${display.className} text-[22px] sm:text-[26px]`} style={{ color: NAVY, fontWeight: 500 }}>
                 {formatINR(unitPrice)}
@@ -393,8 +418,6 @@ export default function ProductPage() {
               </p>
             )}
 
-            {/* Fabric line — hidden on mobile above-the-fold view, still
-                shown on desktop where vertical space isn't at a premium */}
             {product.fabric && (
               <p className="hidden sm:block text-sm mt-3" style={{ color: GREY }}>
                 Fabric <span style={{ color: INK }}>— {product.fabric}</span>
@@ -496,49 +519,8 @@ export default function ProductPage() {
           </div>
         </div>
 
-        {/* Reviews */}
-        {/* {reviews?.length > 0 && (
-          <div className="mt-20 sm:mt-28">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.18em] mb-8 pb-3" style={{ color: INK, borderBottom: `1px solid ${GOLD}` }}>
-              Customer Reviews
-            </h2>
-            <div className="grid sm:grid-cols-2 gap-x-12 gap-y-8">
-              {reviews.map((r) => (
-                <div key={r._id} className="pt-5" style={{ borderTop: `1px solid ${LINE}` }}>
-                  <div className="flex items-center gap-1 mb-2 text-xs" style={{ color: GREY }}>
-                    <Star size={12} strokeWidth={1.5} style={{ fill: GOLD, color: GOLD }} />
-                    <span style={{ color: INK }}>{r.rating}</span>
-                    {r.isVerifiedPurchase && (
-                      <span className="ml-1" style={{ color: NEUTRAL }}>· Verified purchase</span>
-                    )}
-                  </div>
-
-                  <p className={`${display.className} text-sm leading-relaxed`} style={{ color: INK }}>
-                    {r.comment}
-                  </p> */}
-
-                  {/* Review images — only rendered when present */}
-                  {/* {r.images?.length > 0 && (
-                    <div className="flex gap-2 mt-3 flex-wrap">
-                      {r.images.map((img, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setLightboxImg(img)}
-                          className="relative w-14 h-14 overflow-hidden shrink-0"
-                          style={{ borderRadius: '3px', background: CREAM }}
-                        >
-                          <Image src={img} alt="" fill className="object-cover" sizes="56px" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  <p className="text-xs mt-3" style={{ color: GREY }}>{r.customerName}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )} */}
+        {/* Reviews — still disabled. When you re-enable, use plain <img>
+            with resizeImage(img, 120) for the review thumbnails. */}
 
         {/* Related */}
         {related?.length > 0 && (
@@ -553,9 +535,8 @@ export default function ProductPage() {
         )}
       </div>
 
-      {/* Sticky mobile buy bar — portaled directly to <body> so no ancestor
-          can break its fixed positioning. */}
-      {mounted && data?.product && createPortal(
+      {/* Sticky mobile buy bar */}
+      {mounted && createPortal(
         <div
           className="sm:hidden fixed bottom-0 left-0 right-0 flex items-center gap-3 px-5 py-3"
           style={{ background: PAPER, borderTop: `2px solid ${GOLD}`, boxShadow: '0 -4px 16px rgba(7, 26, 58, 0.08)', zIndex: 9999 }}
@@ -590,7 +571,7 @@ export default function ProductPage() {
         document.body
       )}
 
-      {/* Review-image lightbox — single image, closes on backdrop click or the ✕ button */}
+      {/* Review-image lightbox */}
       {mounted && lightboxImg && createPortal(
         <div
           onClick={() => setLightboxImg(null)}
@@ -606,14 +587,17 @@ export default function ProductPage() {
             >
               <X size={20} />
             </button>
-            <Image src={lightboxImg} alt="Review image" fill className="object-contain" sizes="90vw" />
+            <img
+              src={resizeImage(lightboxImg, 900)}
+              alt="Review image"
+              className="absolute inset-0 w-full h-full object-contain"
+            />
           </div>
         </div>,
         document.body
       )}
 
-      {/* Size chart modal — swipeable carousel when there's more than one
-          image, closes on backdrop click or the ✕ button */}
+      {/* Size chart modal */}
       {mounted && sizeChartOpen && sizeChartImages.length > 0 && createPortal(
         <div
           onClick={() => setSizeChartOpen(false)}
@@ -631,12 +615,11 @@ export default function ProductPage() {
             </button>
 
             <div className="relative w-full aspect-square" style={{ background: PAPER, borderRadius: '4px', overflow: 'hidden' }}>
-              <Image
-                src={sizeChartImages[sizeChartIndex]}
+              <img
+                src={resizeImage(sizeChartImages[sizeChartIndex], 900)}
                 alt={`Size chart ${sizeChartIndex + 1} of ${sizeChartImages.length}`}
-                fill
-                className="object-contain"
-                sizes="90vw"
+                decoding="async"
+                className="absolute inset-0 w-full h-full object-contain"
               />
 
               {sizeChartImages.length > 1 && (

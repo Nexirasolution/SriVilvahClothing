@@ -10,6 +10,20 @@ import Settings from '@/models/Settings';
 const display = Playfair_Display({ subsets: ['latin'], variable: '--font-display', weight: ['600', '700', '800'] });
 const body = Poppins({ subsets: ['latin'], variable: '--font-body', weight: ['300', '400', '500', '600', '700'] });
 
+const DEFAULT_SITE_URL = 'https://srivilvahclothing.co.in';
+
+// Always returns a valid absolute URL object, even if the env var
+// is missing the protocol (e.g. "srivilvahclothing.co.in" or "localhost:3000").
+function getSiteUrl() {
+  const raw = (process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL).trim();
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    return new URL(withProtocol);
+  } catch {
+    return new URL(DEFAULT_SITE_URL);
+  }
+}
+
 export async function generateMetadata() {
   let settings = null;
   try {
@@ -18,15 +32,16 @@ export async function generateMetadata() {
   } catch {
     settings = null;
   }
+
   const title = settings?.seoTitle || 'Sri Vilvah Clothings - Women Kurtis, Nighties & More';
   const description =
     settings?.seoDescription ||
-    'Shop authentic women kurtis, nighties, innerwear and trending collections online from Sri Vivah Clothings.';
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'srivilvahclothing.co.in';
+    'Shop authentic women kurtis, nighties, innerwear and trending collections online from Sri Vilvah Clothings.';
+
   return {
     title: { default: title, template: '%s | Sri Vilvah Clothings' },
     description,
-    metadataBase: new URL(siteUrl),
+    metadataBase: getSiteUrl(),
     keywords: ['women kurtis online', 'nighties online', 'innerwear online', 'Sri Vilvah Clothings', 'women fashion'],
     openGraph: { title, description, siteName: 'Sri Vilvah Clothings', type: 'website' },
     icons: { icon: '/favicon.ico' },
