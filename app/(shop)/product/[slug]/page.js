@@ -45,7 +45,7 @@ function ProductSkeleton() {
     <div className={`${body.className} min-h-screen`} style={{ background: PAPER }}>
       <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-4 sm:pt-16">
         <div className="grid sm:grid-cols-2 gap-4 sm:gap-16 animate-pulse">
-          <div className="w-full h-[38vh] sm:h-auto sm:aspect-[4/5]" style={{ background: CREAM, borderRadius: '4px' }} />
+          <div className="w-full aspect-[3/4] sm:aspect-[4/5]" style={{ background: CREAM, borderRadius: '4px' }} />
           <div className="flex flex-col gap-4">
             <div className="h-3 w-24" style={{ background: CREAM }} />
             <div className="h-8 w-3/4" style={{ background: CREAM }} />
@@ -265,7 +265,7 @@ export default function ProductPage() {
             {/* The image fills the whole frame edge-to-edge (object-cover),
                 anchored to the top so faces / necklines are never cut off. */}
             <div
-              className="relative w-full h-[38vh] sm:h-auto sm:aspect-[4/5] overflow-hidden"
+              className="relative w-full aspect-[3/4] sm:aspect-[4/5] overflow-hidden"
               style={{ background: CREAM, borderRadius: '4px' }}
             >
               {mainImage && (
@@ -280,7 +280,7 @@ export default function ProductPage() {
                   fetchPriority="high"
                   loading="eager"
                   decoding="async"
-                  className="absolute inset-0 w-full h-full object-cover object-top"
+                  className="absolute inset-0 w-full h-full object-contain sm:object-cover sm:object-top"
                 />
               )}
 
