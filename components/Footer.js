@@ -2,6 +2,7 @@ import { MapPin } from 'lucide-react';
 import { Fraunces, Inter } from 'next/font/google';
 import { dbConnect } from '@/lib/mongodb';
 import Category from '@/models/Category';
+import Settings from '@/models/Settings';
 import FooterLinks from './FooterLinks';
 
 const display = Fraunces({ subsets: ['latin'], weight: ['400'], variable: '--font-display' });
@@ -18,28 +19,51 @@ const GOLD_PALE = '#E6D39A';
 const INK = NAVY_DARK;
 const INK_SOFT = 'rgba(16, 42, 86, 0.70)';
 
-async function getCategories() {
+// Used until the admin saves footer settings for the first time.
+const DEFAULT_QUICK_LINKS = [
+  { label: 'Home', href: '/' },
+  { label: 'Shop', href: '/shop' },
+  { label: 'Wishlist', href: '/wishlist' },
+  { label: 'Bulk Order Enquiry', href: '/bulk-enquiry' },
+];
+const DEFAULT_ADDRESS = '92, SRP Mills, Sathy Road,\nSaravanampatti,\nCoimbatore, Tamil Nadu 641035';
+
+async function getFooterData() {
   await dbConnect();
-  const categories = await Category.find({}).select('name slug').lean();
-  return JSON.parse(JSON.stringify(categories));
+  const [categories, settings] = await Promise.all([
+    Category.find({}).select('name slug').lean(),
+    Settings.findOne({ key: 'global' }).lean(),
+  ]);
+  return JSON.parse(JSON.stringify({ categories, settings: settings || {} }));
+}
+
+// Accepts "handle", "@handle" or a full URL.
+function toInstagramUrl(value, fallback) {
+  const v = (value || '').trim();
+  if (!v) return fallback;
+  if (/^https?:\/\//i.test(v)) return v;
+  return `https://www.instagram.com/${v.replace(/^@/, '')}`;
 }
 
 export default async function Footer() {
-  const whatsapp = process.env.NEXT_PUBLIC_WHATSAPP || '919976449441';
-  const phoneDisplay = '+91 99764 49441';
-  const email = 'vilvahclothing@gmail.com';
-  const instagram =
-    process.env.NEXT_PUBLIC_INSTAGRAM ||
-    'https://www.instagram.com/vilvahclothings';
-  const categories = await getCategories();
+  const { categories, settings: s } = await getFooterData();
 
-  const quickLinks = [
-    { label: 'Home', href: '/' },
-    { label: 'Shop', href: '/shop' },
-    { label: 'Wishlist', href: '/wishlist' },
-    { label: 'Bulk Order Enquiry', href: '/bulk-enquiry' },
-    // { label: 'Contact', href: '/contact' },
-  ];
+  const storeName = s.storeName?.trim() || 'Sri Vilvah';
+  const tagline = s.footerTagline ?? 'by Chitra S';
+  const note = s.footerNote ?? 'Online sales only';
+  const addressLines = (s.address ?? DEFAULT_ADDRESS)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const whatsapp = (s.whatsapp || process.env.NEXT_PUBLIC_WHATSAPP || '919976449441').replace(/\D/g, '');
+  const phoneDisplay = s.phoneDisplay?.trim() || `+${whatsapp}`;
+  const email = (s.email ?? 'vilvahclothing@gmail.com').trim();
+  const instagram = toInstagramUrl(
+    s.instagram,
+    process.env.NEXT_PUBLIC_INSTAGRAM || 'https://www.instagram.com/vilvahclothings'
+  );
+  const quickLinks = Array.isArray(s.quickLinks) ? s.quickLinks : DEFAULT_QUICK_LINKS;
 
   return (
     <footer
@@ -51,25 +75,34 @@ export default async function Footer() {
         {/* Brand column */}
         <div className="sm:col-span-4">
           <h3 className={`${display.className} text-2xl leading-tight`} style={{ color: INK, fontWeight: 400 }}>
-            Sri Vilvah
+            {storeName}
           </h3>
-          <p className="text-[11px] font-medium tracking-wide mb-4" style={{ color: NAVY }}>
-            by Chitra S
-          </p>
+          {tagline && (
+            <p className="text-[11px] font-medium tracking-wide mb-4" style={{ color: NAVY }}>
+              {tagline}
+            </p>
+          )}
 
-          <p className="flex items-start gap-1.5 text-xs leading-relaxed" style={{ color: INK_SOFT }}>
-            <MapPin size={13} className="shrink-0 mt-0.5" style={{ color: GOLD }} />
-            <span>
-              92, SRP Mills, Sathy Road,<br />
-              Saravanampatti,<br />
-              Coimbatore, Tamil Nadu 641035
-            </span>
-          </p>
+          {addressLines.length > 0 && (
+            <p className="flex items-start gap-1.5 text-xs leading-relaxed" style={{ color: INK_SOFT }}>
+              <MapPin size={13} className="shrink-0 mt-0.5" style={{ color: GOLD }} />
+              <span>
+                {addressLines.map((line, i) => (
+                  <span key={i}>
+                    {line}
+                    {i < addressLines.length - 1 && <br />}
+                  </span>
+                ))}
+              </span>
+            </p>
+          )}
 
-          <p className="inline-flex items-center gap-1.5 mt-4 text-[11px] font-normal tracking-wide" style={{ color: INK_SOFT }}>
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: GOLD }} />
-            Online sales only
-          </p>
+          {note && (
+            <p className="inline-flex items-center gap-1.5 mt-4 text-[11px] font-normal tracking-wide" style={{ color: INK_SOFT }}>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: GOLD }} />
+              {note}
+            </p>
+          )}
         </div>
 
         {/* Shop / Quick Links / Connect — accordion on mobile, columns on desktop */}
@@ -87,7 +120,7 @@ export default async function Footer() {
       <div style={{ background: NAVY_DARK, borderTop: `1px solid ${GOLD}` }}>
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-[11px]" style={{ color: GOLD_PALE }}>
-            © {new Date().getFullYear()} Sri Vilvah. All rights reserved.
+            © {new Date().getFullYear()} {storeName}. All rights reserved.
           </p>
 
           <a

@@ -9,6 +9,29 @@ const SettingsSchema = new mongoose.Schema(
     instagram: { type: String },
     address: { type: String },
 
+    // ── Footer content (editable from Admin → Store Settings) ──
+    // No schema defaults on purpose: an old document without these fields
+    // stays "undefined", so the admin page and the footer can fall back to
+    // the built-in values instead of showing blanks.
+    // WhatsApp floating chat button (no defaults, same reason as above)
+    whatsappMessage: { type: String },
+    whatsappButtonText: { type: String },
+
+    footerTagline: { type: String },
+    footerNote: { type: String },
+    phoneDisplay: { type: String },
+    email: { type: String },
+    quickLinks: {
+      type: [
+        {
+          _id: false,
+          label: { type: String, required: true },
+          href: { type: String, required: true }
+        }
+      ],
+      default: undefined
+    },
+
     // Weight-based shipping: admin sets the assumed weight of a single
     // piece (garment/unit) and a price per kg. Total order weight is
     // computed as (total piece count across the cart) * weightPerPiece,

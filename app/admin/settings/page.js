@@ -10,13 +10,37 @@ import { INDIAN_STATES } from '@/lib/indianStates';
 const inputCls = 'w-full min-w-0 border rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm mt-1';
 const smallInputCls = 'w-full min-w-0 border rounded-lg px-3 py-2.5 sm:px-2 sm:py-2 text-base sm:text-sm';
 
+// Pre-filled for stores that haven't saved footer settings yet, so the admin
+// form shows what the footer currently displays and nothing disappears on save.
+const DEFAULT_QUICK_LINKS = [
+  { label: 'Home', href: '/' },
+  { label: 'Shop', href: '/shop' },
+  { label: 'Wishlist', href: '/wishlist' },
+  { label: 'Bulk Order Enquiry', href: '/bulk-enquiry' }
+];
+const DEFAULT_ADDRESS = '92, SRP Mills, Sathy Road,\nSaravanampatti,\nCoimbatore, Tamil Nadu 641035';
+
 export default function AdminSettingsPage() {
   const [form, setForm] = useState(null);
 
   useEffect(() => {
     fetch('/api/admin/settings')
       .then((r) => r.json())
-      .then((d) => setForm({ ...d.settings, stateShipping: d.settings?.stateShipping || [] }));
+      .then((d) => {
+        const s = d.settings || {};
+        setForm({
+          ...s,
+          stateShipping: s.stateShipping || [],
+          address: s.address || DEFAULT_ADDRESS,
+          whatsappMessage: s.whatsappMessage ?? "Hi! I'd like to know more about your products.",
+          whatsappButtonText: s.whatsappButtonText ?? 'Chat with us',
+          footerTagline: s.footerTagline ?? 'by Chitra S',
+          footerNote: s.footerNote ?? 'Online sales only',
+          phoneDisplay: s.phoneDisplay ?? '+91 99764 49441',
+          email: s.email ?? 'vilvahclothing@gmail.com',
+          quickLinks: Array.isArray(s.quickLinks) ? s.quickLinks : DEFAULT_QUICK_LINKS
+        });
+      });
   }, []);
 
   async function submit(e) {
@@ -50,6 +74,23 @@ export default function AdminSettingsPage() {
     setForm((f) => ({ ...f, stateShipping: f.stateShipping.filter((_, i) => i !== idx) }));
   }
 
+  // ── Footer quick links ────────────────────────────────────────────
+  function addQuickLink() {
+    setForm((f) => ({ ...f, quickLinks: [...f.quickLinks, { label: '', href: '/' }] }));
+  }
+
+  function updateQuickLink(idx, key, value) {
+    setForm((f) => {
+      const list = [...f.quickLinks];
+      list[idx] = { ...list[idx], [key]: value };
+      return { ...f, quickLinks: list };
+    });
+  }
+
+  function removeQuickLink(idx) {
+    setForm((f) => ({ ...f, quickLinks: f.quickLinks.filter((_, i) => i !== idx) }));
+  }
+
   if (!form) return <p className="text-brand-ink/50">Loading...</p>;
 
   return (
@@ -58,19 +99,79 @@ export default function AdminSettingsPage() {
       <form onSubmit={submit} className="card-soft p-4 sm:p-5 space-y-4 sm:space-y-3">
         <div>
           <label className="text-sm font-medium">Store Name</label>
-          <input className={inputCls} value={form.storeName} onChange={(e) => setForm({ ...form, storeName: e.target.value })} />
+          <input className={inputCls} value={form.storeName || ''} onChange={(e) => setForm({ ...form, storeName: e.target.value })} />
         </div>
         <div>
           <label className="text-sm font-medium">WhatsApp Number (with country code)</label>
-          <input className={inputCls} inputMode="tel" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
+          <input className={inputCls} inputMode="tel" value={form.whatsapp || ''} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
         </div>
         <div>
-          <label className="text-sm font-medium">Instagram Handle</label>
-          <input className={inputCls} value={form.instagram} onChange={(e) => setForm({ ...form, instagram: e.target.value })} />
+          <label className="text-sm font-medium">WhatsApp chat message (pre-filled when a customer taps the button)</label>
+          <textarea rows={2} className={inputCls} value={form.whatsappMessage || ''} onChange={(e) => setForm({ ...form, whatsappMessage: e.target.value })} />
         </div>
         <div>
-          <label className="text-sm font-medium">Address</label>
-          <input className={inputCls} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <label className="text-sm font-medium">WhatsApp button label (shown on hover)</label>
+          <input className={inputCls} placeholder="Chat with us" value={form.whatsappButtonText || ''} onChange={(e) => setForm({ ...form, whatsappButtonText: e.target.value })} />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Instagram Handle or URL</label>
+          <input className={inputCls} value={form.instagram || ''} onChange={(e) => setForm({ ...form, instagram: e.target.value })} />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Address (each line shows as a new line in the footer)</label>
+          <textarea rows={3} className={inputCls} value={form.address || ''} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+        </div>
+
+        {/* ── Footer content ── */}
+        <div className="border rounded-lg p-3 mt-2 space-y-3">
+          <p className="text-sm font-semibold">Footer</p>
+
+          <div>
+            <label className="text-sm font-medium">Tagline (under store name)</label>
+            <input className={inputCls} placeholder="by Chitra S" value={form.footerTagline || ''} onChange={(e) => setForm({ ...form, footerTagline: e.target.value })} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Small note (e.g. Online sales only)</label>
+            <input className={inputCls} value={form.footerNote || ''} onChange={(e) => setForm({ ...form, footerNote: e.target.value })} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Phone number shown in footer</label>
+            <input className={inputCls} inputMode="tel" placeholder="+91 99764 49441" value={form.phoneDisplay || ''} onChange={(e) => setForm({ ...form, phoneDisplay: e.target.value })} />
+            <p className="text-xs text-brand-ink/50 mt-1">The WhatsApp link uses the WhatsApp number above. Leave blank to show it as +number.</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium">Email</label>
+            <input type="email" className={inputCls} value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium">Quick links</label>
+              <button
+                type="button"
+                onClick={addQuickLink}
+                className="flex items-center gap-1 text-sm border rounded-lg px-3 py-2 sm:py-1.5 hover:border-brand-magenta transition-colors"
+              >
+                <Plus size={14} /> Add link
+              </button>
+            </div>
+            <div className="space-y-2 mt-2">
+              {form.quickLinks.map((l, idx) => (
+                <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                  <input className={smallInputCls} placeholder="Label" value={l.label} onChange={(e) => updateQuickLink(idx, 'label', e.target.value)} />
+                  <input className={smallInputCls} placeholder="/shop or https://…" value={l.href} onChange={(e) => updateQuickLink(idx, 'href', e.target.value)} />
+                  <button
+                    type="button"
+                    aria-label="Remove link"
+                    onClick={() => removeQuickLink(idx)}
+                    className="p-2 text-brand-ink/50 hover:text-brand-magenta"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Weight-based shipping. Each product has its own weight (set on the
@@ -228,11 +329,11 @@ export default function AdminSettingsPage() {
 
         <div>
           <label className="text-sm font-medium">SEO Title</label>
-          <input className={inputCls} value={form.seoTitle} onChange={(e) => setForm({ ...form, seoTitle: e.target.value })} />
+          <input className={inputCls} value={form.seoTitle || ''} onChange={(e) => setForm({ ...form, seoTitle: e.target.value })} />
         </div>
         <div>
           <label className="text-sm font-medium">SEO Description</label>
-          <textarea rows={3} className={inputCls} value={form.seoDescription} onChange={(e) => setForm({ ...form, seoDescription: e.target.value })} />
+          <textarea rows={3} className={inputCls} value={form.seoDescription || ''} onChange={(e) => setForm({ ...form, seoDescription: e.target.value })} />
         </div>
         <button className="btn-primary text-sm w-full sm:w-auto py-3 sm:py-2">Save Settings</button>
       </form>

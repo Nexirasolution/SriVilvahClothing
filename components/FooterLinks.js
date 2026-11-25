@@ -60,6 +60,30 @@ function underlineOff(el) {
   el.style.textDecoration = 'none';
 }
 
+// Internal paths use next/link; external / mailto / tel use a plain <a>.
+function QuickLink({ link }) {
+  const isInternal = link.href.startsWith('/');
+  const props = {
+    className: 'text-[13px] transition-colors',
+    style: { color: INK },
+    onMouseEnter: (e) => underlineOn(e.currentTarget),
+    onMouseLeave: (e) => underlineOff(e.currentTarget),
+  };
+  if (isInternal) {
+    return <Link href={link.href} {...props}>{link.label}</Link>;
+  }
+  const external = /^https?:\/\//i.test(link.href);
+  return (
+    <a
+      href={link.href}
+      {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
+      {...props}
+    >
+      {link.label}
+    </a>
+  );
+}
+
 export default function FooterLinks({
   categories,
   quickLinks,
@@ -98,17 +122,9 @@ export default function FooterLinks({
       <div className="sm:col-span-3">
         <AccordionSection id="quicklinks" title="Quick Links" openSection={openSection} onToggle={toggle}>
           <ul className="space-y-2.5">
-            {quickLinks.map((link) => (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  className="text-[13px] transition-colors"
-                  style={{ color: INK }}
-                  onMouseEnter={(e) => underlineOn(e.currentTarget)}
-                  onMouseLeave={(e) => underlineOff(e.currentTarget)}
-                >
-                  {link.label}
-                </Link>
+            {quickLinks.map((link, i) => (
+              <li key={`${link.href}-${i}`}>
+                <QuickLink link={link} />
               </li>
             ))}
           </ul>
@@ -119,53 +135,61 @@ export default function FooterLinks({
       <div className="sm:col-span-3">
         <AccordionSection id="connect" title="Connect" openSection={openSection} onToggle={toggle}>
           <div className="flex gap-2 mb-5">
-            <a
-              href={`https://wa.me/${whatsapp}`}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="WhatsApp"
-              className="flex items-center justify-center w-9 h-9 rounded-full transition-opacity hover:opacity-75"
-              style={{ background: 'transparent', border: `1px solid ${GOLD}`, color: NAVY }}
-            >
-              <WhatsAppIcon size={16} />
-            </a>
-
-            <a
-              href={instagram}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Instagram"
-              className="flex items-center justify-center w-9 h-9 rounded-full transition-opacity hover:opacity-75"
-              style={{ background: 'transparent', border: `1px solid ${GOLD}`, color: NAVY }}
-            >
-              <Instagram size={16} strokeWidth={1.75} />
-            </a>
-          </div>
-
-          <div className="text-xs space-y-3 leading-relaxed" style={{ color: INK_SOFT }}>
-            <p>
-              <span className="font-semibold" style={{ color: INK }}>WhatsApp</span><br />
+            {whatsapp && (
               <a
                 href={`https://wa.me/${whatsapp}`}
                 target="_blank"
                 rel="noreferrer"
-                onMouseEnter={(e) => underlineOn(e.currentTarget)}
-                onMouseLeave={(e) => underlineOff(e.currentTarget)}
+                aria-label="WhatsApp"
+                className="flex items-center justify-center w-9 h-9 rounded-full transition-opacity hover:opacity-75"
+                style={{ background: 'transparent', border: `1px solid ${GOLD}`, color: NAVY }}
               >
-                {phoneDisplay}
+                <WhatsAppIcon size={16} />
               </a>
-            </p>
-            <p>
-              <span className="font-semibold" style={{ color: INK }}>Email</span><br />
+            )}
+
+            {instagram && (
               <a
-                href={`mailto:${email}`}
-                className="break-all"
-                onMouseEnter={(e) => underlineOn(e.currentTarget)}
-                onMouseLeave={(e) => underlineOff(e.currentTarget)}
+                href={instagram}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Instagram"
+                className="flex items-center justify-center w-9 h-9 rounded-full transition-opacity hover:opacity-75"
+                style={{ background: 'transparent', border: `1px solid ${GOLD}`, color: NAVY }}
               >
-                {email}
+                <Instagram size={16} strokeWidth={1.75} />
               </a>
-            </p>
+            )}
+          </div>
+
+          <div className="text-xs space-y-3 leading-relaxed" style={{ color: INK_SOFT }}>
+            {whatsapp && (
+              <p>
+                <span className="font-semibold" style={{ color: INK }}>WhatsApp</span><br />
+                <a
+                  href={`https://wa.me/${whatsapp}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  onMouseEnter={(e) => underlineOn(e.currentTarget)}
+                  onMouseLeave={(e) => underlineOff(e.currentTarget)}
+                >
+                  {phoneDisplay}
+                </a>
+              </p>
+            )}
+            {email && (
+              <p>
+                <span className="font-semibold" style={{ color: INK }}>Email</span><br />
+                <a
+                  href={`mailto:${email}`}
+                  className="break-all"
+                  onMouseEnter={(e) => underlineOn(e.currentTarget)}
+                  onMouseLeave={(e) => underlineOff(e.currentTarget)}
+                >
+                  {email}
+                </a>
+              </p>
+            )}
           </div>
         </AccordionSection>
       </div>

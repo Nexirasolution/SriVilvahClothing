@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { dbConnect } from '@/lib/mongodb';
 import Settings from '@/models/Settings';
 import { requireAdmin } from '@/lib/apiAuth';
@@ -28,6 +29,19 @@ function cleanStateShipping(list) {
   return out;
 }
 
+// Footer quick links end up in public <a> tags, so only allow safe schemes
+// (relative path, http(s), mailto, tel). `javascript:` etc. are dropped.
+function cleanQuickLinks(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((l) => ({
+      label: String(l?.label || '').trim().slice(0, 40),
+      href: String(l?.href || '').trim().slice(0, 300)
+    }))
+    .filter((l) => l.label && /^(\/|https?:\/\/|mailto:|tel:)/i.test(l.href))
+    .slice(0, 12);
+}
+
 export async function GET() {
   await dbConnect();
   let settings = await Settings.findOne({ key: 'global' });
@@ -40,7 +54,9 @@ export const PUT = requireAdmin(async (req) => {
   const body = await req.json();
   const update = { ...body };
   if ('stateShipping' in body) update.stateShipping = cleanStateShipping(body.stateShipping);
+  if ('quickLinks' in body) update.quickLinks = cleanQuickLinks(body.quickLinks);
   const settings = await Settings.findOneAndUpdate({ key: 'global' }, update, { new: true, upsert: true });
+  revalidatePath('/', 'layout'); // footer lives in the layout
   return NextResponse.json({ settings });
 });
 
