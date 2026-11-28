@@ -511,7 +511,9 @@ export default function ProductPage() {
                 <h3 className="text-[11px] font-medium uppercase tracking-[0.18em] mb-3" style={{ color: INK }}>
                   Description
                 </h3>
-                <p>{product.description}</p>
+                {/* whitespace-pre-wrap keeps the exact line breaks, blank lines
+                    and spacing the admin typed in the description box. */}
+                <p className="whitespace-pre-wrap break-words">{product.description}</p>
               </div>
             )}
 
