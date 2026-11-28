@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { MapPin } from 'lucide-react';
 import { Fraunces, Inter } from 'next/font/google';
 import { dbConnect } from '@/lib/mongodb';
@@ -27,6 +28,12 @@ const DEFAULT_QUICK_LINKS = [
   { label: 'Bulk Order Enquiry', href: '/bulk-enquiry' },
 ];
 const DEFAULT_ADDRESS = '92, SRP Mills, Sathy Road,\nSaravanampatti,\nCoimbatore, Tamil Nadu 641035';
+
+// Always shown in the bottom bar, independent of the admin-editable quick links.
+const POLICY_LINKS = [
+  { label: 'Shipping Policy', href: '/shipping-policy' },
+  { label: 'Return & Exchange Policy', href: '/return-policy' },
+];
 
 async function getFooterData() {
   await dbConnect();
@@ -118,10 +125,24 @@ export default async function Footer() {
 
       {/* Bottom bar — navy, bookends the coupon marquee */}
       <div style={{ background: NAVY_DARK, borderTop: `1px solid ${GOLD}` }}>
-        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col lg:flex-row items-center justify-between gap-3">
           <p className="text-[11px]" style={{ color: GOLD_PALE }}>
             © {new Date().getFullYear()} {storeName}. All rights reserved.
           </p>
+
+          {/* Policy links */}
+          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
+            {POLICY_LINKS.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className="text-[11px] transition-opacity hover:opacity-75"
+                style={{ color: GOLD_PALE }}
+              >
+                {l.label}
+              </Link>
+            ))}
+          </nav>
 
           <a
             href="https://www.nexirasolution.in"
