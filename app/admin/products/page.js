@@ -3,8 +3,28 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Search, X, UploadCloud } from 'lucide-react';
+import {
+  Plus, Pencil, Trash2, Search, X, UploadCloud, ChevronLeft, ChevronRight,
+} from 'lucide-react';
 import { formatINR } from '@/lib/utils';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+// Builds a compact page list like: 1 … 4 5 6 … 12
+function getPageItems(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+
+  const items = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+
+  if (start > 2) items.push('...');
+  for (let i = start; i <= end; i++) items.push(i);
+  if (end < total - 1) items.push('...');
+
+  items.push(total);
+  return items;
+}
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
@@ -15,9 +35,13 @@ export default function AdminProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest'); // newest | category | name | priceLow | priceHigh
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   async function load() {
     setLoading(true);
-    const res = await fetch('/api/products?limit=100');
+    const res = await fetch('/api/products?limit=all');
     const data = await res.json();
     setProducts(data.products || []);
     setLoading(false);
@@ -27,6 +51,11 @@ export default function AdminProductsPage() {
     load();
     fetch('/api/categories').then((r) => r.json()).then((d) => setCategories(d.categories || []));
   }, []);
+
+  // Go back to page 1 whenever the result set changes shape
+  useEffect(() => {
+    setPage(1);
+  }, [search, categoryFilter, sortBy, pageSize]);
 
   async function remove(id) {
     if (!confirm('Delete this product?')) return;
@@ -74,6 +103,15 @@ export default function AdminProductsPage() {
 
     return list;
   }, [products, search, categoryFilter, sortBy]);
+
+  // Pagination math (safePage handles the case where the last item on the
+  // last page is deleted and the page no longer exists)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const paginated = filtered.slice(startIndex, startIndex + pageSize);
+  const showingFrom = filtered.length === 0 ? 0 : startIndex + 1;
+  const showingTo = Math.min(startIndex + pageSize, filtered.length);
 
   return (
     <div>
@@ -147,7 +185,7 @@ export default function AdminProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
+              {paginated.map((p) => (
                 <tr key={p._id} className="border-b border-brand-ink/5">
                   <td className="p-3 font-medium">{p.name}</td>
                   <td className="p-3 text-brand-ink/60">
@@ -175,6 +213,64 @@ export default function AdminProductsPage() {
                 ? 'No products yet. Add your first product!'
                 : 'No products match your filters.'}
             </p>
+          )}
+
+          {/* Pagination */}
+          {filtered.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 border-t border-brand-ink/10 text-sm">
+              <div className="flex items-center gap-3 text-brand-ink/60">
+                <span>
+                  Showing {showingFrom}–{showingTo} of {filtered.length}
+                </span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="px-2 py-1 text-sm rounded-lg border border-brand-ink/10 outline-none"
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>{n} / page</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(safePage - 1)}
+                  disabled={safePage === 1}
+                  className="p-1.5 rounded-lg border border-brand-ink/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                {getPageItems(safePage, totalPages).map((item, i) =>
+                  item === '...' ? (
+                    <span key={`dots-${i}`} className="px-2 text-brand-ink/40">…</span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => setPage(item)}
+                      className={`min-w-[32px] px-2 py-1 rounded-lg border text-sm ${
+                        item === safePage
+                          ? 'bg-brand-magenta text-white border-brand-magenta'
+                          : 'border-brand-ink/10 text-brand-ink/70'
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+
+                <button
+                  onClick={() => setPage(safePage + 1)}
+                  disabled={safePage === totalPages}
+                  className="p-1.5 rounded-lg border border-brand-ink/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Next page"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
